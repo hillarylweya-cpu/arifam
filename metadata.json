@@ -1,0 +1,5 @@
+{
+  "name": "AgriFarm",
+  "description": "A comprehensive agricultural management platform for farmers, admins, and drone operators, featuring AI assistance, field mapping, and drone fleet management.",
+  "requestFramePermissions": ["camera", "microphone", "geolocation"]
+}

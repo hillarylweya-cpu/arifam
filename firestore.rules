@@ -1,0 +1,209 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (Auth UID)
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required, email format)
+    //   - role: string (required, enum: Farmer, Admin, Drone Operator)
+    //   - displayName: string (optional)
+    //   - createdAt: string (required, date-time)
+    //
+    // Collection: fields
+    // Document ID: fieldId
+    // Fields:
+    //   - fieldId: string (required)
+    //   - farmerId: string (required, owner UID)
+    //   - name: string (required)
+    //   - boundary: list (optional, list of lat/lng maps)
+    //   - location: map (required, lat/lng)
+    //   - placeName: string (optional)
+    //   - createdAt: string (required, date-time)
+    //
+    // Collection: serviceRequests
+    // Document ID: requestId
+    // Fields:
+    //   - requestId: string (required)
+    //   - farmerId: string (required, requester UID)
+    //   - serviceType: string (required, enum)
+    //   - details: string (optional)
+    //   - preferredDateTime: string (required, date-time)
+    //   - status: string (required, enum)
+    //   - assignedOperatorId: string (optional)
+    //   - createdAt: string (required, date-time)
+    //
+    // Collection: drones
+    // Document ID: droneId
+    // Fields:
+    //   - droneId: string (required)
+    //   - name: string (required)
+    //   - specs: string (optional)
+    //   - status: string (required, enum)
+    //   - condition: string (optional)
+    //   - battery: number (required, 0-100)
+    //   - location: map (optional, lat/lng)
+    //   - assignedOperatorId: string (optional)
+    //   - createdAt: string (required, date-time)
+    //
+    // Collection: alerts
+    // Document ID: alertId
+    // Fields:
+    //   - alertId: string (required)
+    //   - userId: string (required, recipient UID)
+    //   - type: string (required, enum)
+    //   - message: string (required)
+    //   - severity: string (required, enum)
+    //   - createdAt: string (required, date-time)
+    //
+    // Collection: auth_logs
+    // Document ID: logId
+    // Fields:
+    //   - timestamp: string (required, date-time)
+    //   - errorCode: string (required)
+    //   - message: string (required)
+    //   - email: string (optional)
+    //   - mode: string (required, enum)
+    //   - domain: string (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin' ||
+         (request.auth.token.email == "hillarylweya@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isOperator() {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Drone Operator';
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.uid is string && 
+             data.email is string && isValidEmail(data.email) &&
+             data.role in ['Farmer', 'Admin', 'Drone Operator'] &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidField(data) {
+      return data.fieldId is string &&
+             data.farmerId is string &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.location is map &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidServiceRequest(data) {
+      return data.requestId is string &&
+             data.farmerId is string &&
+             data.serviceType in ['pest control', 'irrigation', 'soil test', 'drone scan'] &&
+             data.status in ['pending', 'assigned', 'in-progress', 'completed'] &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidDrone(data) {
+      return data.droneId is string &&
+             data.name is string &&
+             data.status in ['active', 'maintenance', 'offline'] &&
+             data.battery is number && data.battery >= 0 && data.battery <= 100 &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidAlert(data) {
+      return data.alertId is string &&
+             data.userId is string &&
+             data.type in ['weather', 'drone', 'service'] &&
+             data.severity in ['low', 'medium', 'high'] &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidAuthLog(data) {
+      return isValidDateString(data.timestamp) &&
+             data.errorCode is string &&
+             data.message is string &&
+             data.mode in ['login', 'signup', 'google', 'forgot'] &&
+             data.domain is string;
+    }
+
+    // ===============================================================
+    // Match Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && 
+                    (isOwner(userId) || isAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && 
+                    (isAdmin() || (isOwner(userId) && request.resource.data.role == resource.data.role));
+      allow delete: if isAdmin();
+    }
+
+    match /fields/{fieldId} {
+      allow read: if isAuthenticated() && (isAdmin() || request.auth.uid == resource.data.farmerId);
+      allow create: if isAuthenticated() && isValidField(request.resource.data) && 
+                    (isAdmin() || request.auth.uid == request.resource.data.farmerId);
+      allow update: if isAuthenticated() && isValidField(request.resource.data) && 
+                    (isAdmin() || request.auth.uid == resource.data.farmerId);
+      allow delete: if isAuthenticated() && (isAdmin() || request.auth.uid == resource.data.farmerId);
+    }
+
+    match /serviceRequests/{requestId} {
+      allow read: if isAuthenticated() && (isAdmin() || isOperator() || request.auth.uid == resource.data.farmerId);
+      allow create: if isAuthenticated() && isValidServiceRequest(request.resource.data) && 
+                    (isAdmin() || request.auth.uid == request.resource.data.farmerId);
+      allow update: if isAuthenticated() && isValidServiceRequest(request.resource.data) && 
+                    (isAdmin() || isOperator() || request.auth.uid == resource.data.farmerId);
+      allow delete: if isAdmin();
+    }
+
+    match /drones/{droneId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin();
+      allow update: if isAdmin() || (isOperator() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'condition', 'battery', 'location']));
+      allow delete: if isAdmin();
+    }
+
+    match /alerts/{alertId} {
+      allow read: if isAuthenticated() && (isAdmin() || isOwner(resource.data.userId));
+      allow create: if isAdmin() || isOperator();
+      allow update: if isAdmin();
+      allow delete: if isAdmin() || isOwner(resource.data.userId);
+    }
+
+    match /auth_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isValidAuthLog(request.resource.data);
+      allow update, delete: if false;
+    }
+  }
+}

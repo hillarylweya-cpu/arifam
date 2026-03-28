@@ -1,0 +1,101 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Registered user of the AgriFarm platform.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email", "description": "User's email address" },
+        "role": { "type": "string", "enum": ["Farmer", "Admin", "Drone Operator"], "description": "User's role in the system" },
+        "displayName": { "type": "string", "description": "User's full name" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Account creation timestamp" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Field": {
+      "title": "Field",
+      "description": "A farmer's agricultural field.",
+      "type": "object",
+      "properties": {
+        "fieldId": { "type": "string", "description": "Unique field ID" },
+        "farmerId": { "type": "string", "description": "UID of the field owner" },
+        "name": { "type": "string", "description": "Name of the field" },
+        "boundary": { "type": "array", "items": { "type": "object", "properties": { "lat": { "type": "number" }, "lng": { "type": "number" } } }, "description": "Array of coordinates defining the field boundary" },
+        "location": { "type": "object", "properties": { "lat": { "type": "number" }, "lng": { "type": "number" } }, "description": "Center point of the field" },
+        "placeName": { "type": "string", "description": "Real-world place name" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Field creation timestamp" }
+      },
+      "required": ["fieldId", "farmerId", "name", "location"]
+    },
+    "ServiceRequest": {
+      "title": "Service Request",
+      "description": "A request for agricultural services like drone scans or soil tests.",
+      "type": "object",
+      "properties": {
+        "requestId": { "type": "string", "description": "Unique request ID" },
+        "farmerId": { "type": "string", "description": "UID of the farmer making the request" },
+        "serviceType": { "type": "string", "enum": ["pest control", "irrigation", "soil test", "drone scan"], "description": "Type of service requested" },
+        "details": { "type": "string", "description": "Additional details about the request" },
+        "preferredDateTime": { "type": "string", "format": "date-time", "description": "Farmer's preferred time for the service" },
+        "status": { "type": "string", "enum": ["pending", "assigned", "in-progress", "completed"], "description": "Current status of the request" },
+        "assignedOperatorId": { "type": "string", "description": "UID of the drone operator assigned to this request" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Request creation timestamp" }
+      },
+      "required": ["requestId", "farmerId", "serviceType", "status", "createdAt"]
+    },
+    "Drone": {
+      "title": "Drone",
+      "description": "A drone in the AgriFarm fleet.",
+      "type": "object",
+      "properties": {
+        "droneId": { "type": "string", "description": "Unique drone ID" },
+        "name": { "type": "string", "description": "Name of the drone" },
+        "specs": { "type": "string", "description": "Drone specifications" },
+        "status": { "type": "string", "enum": ["active", "maintenance", "offline"], "description": "Current operational status" },
+        "condition": { "type": "string", "description": "Physical condition of the drone" },
+        "battery": { "type": "number", "description": "Current battery percentage" },
+        "location": { "type": "object", "properties": { "lat": { "type": "number" }, "lng": { "type": "number" } }, "description": "Current GPS location" },
+        "assignedOperatorId": { "type": "string", "description": "UID of the operator currently assigned to this drone" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Drone addition timestamp" }
+      },
+      "required": ["droneId", "name", "status", "battery"]
+    },
+    "Alert": {
+      "title": "Alert",
+      "description": "System or weather alert for a user.",
+      "type": "object",
+      "properties": {
+        "alertId": { "type": "string", "description": "Unique alert ID" },
+        "userId": { "type": "string", "description": "UID of the user receiving the alert" },
+        "type": { "type": "string", "enum": ["weather", "drone", "service"], "description": "Category of the alert" },
+        "message": { "type": "string", "description": "Alert message content" },
+        "severity": { "type": "string", "enum": ["low", "medium", "high"], "description": "Severity level" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Alert creation timestamp" }
+      },
+      "required": ["alertId", "userId", "type", "message", "severity", "createdAt"]
+    },
+    "AuthLog": {
+      "title": "Auth Log",
+      "description": "Log of authentication-related errors and events.",
+      "type": "object",
+      "properties": {
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the error occurred" },
+        "errorCode": { "type": "string", "description": "Firebase Auth error code" },
+        "message": { "type": "string", "description": "Error message" },
+        "email": { "type": "string", "description": "Email used during attempt" },
+        "mode": { "type": "string", "enum": ["login", "signup", "google", "forgot"], "description": "Auth mode" },
+        "domain": { "type": "string", "description": "Hostname where attempt occurred" }
+      },
+      "required": ["timestamp", "errorCode", "message", "mode", "domain"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": "User", "description": "User profiles" },
+    "/fields/{fieldId}": { "schema": "Field", "description": "Agricultural fields" },
+    "/serviceRequests/{requestId}": { "schema": "ServiceRequest", "description": "Service requests" },
+    "/drones/{droneId}": { "schema": "Drone", "description": "Drone fleet" },
+    "/alerts/{alertId}": { "schema": "Alert", "description": "System alerts" },
+    "/auth_logs/{logId}": { "schema": "AuthLog", "description": "Authentication security logs" }
+  }
+}
